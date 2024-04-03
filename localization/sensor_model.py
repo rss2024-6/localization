@@ -163,16 +163,21 @@ class SensorModel:
 
         # 0. Downsample LIDAR data for efficiency
         inds = list(np.round(np.linspace(0, len(observation) - 1, self.num_beams_per_particle, endpoint=True)).astype(int))
-        obs_ds = observation[inds]
+        print(inds)
+        obs_ds = np.array(observation)[inds]
 
         # 1. Convert LIDAR data to pixels (round to nearest integer)
         obs_px = np.round(obs_ds / (self.resolution * self.lidar_scale_to_map_scale)).astype(int)
+        obs_px[obs_px > 200] = 200
+        obs_px[obs_px < 0] = 0
 
         # 2. Get scans from particle POV
         scans = self.scan_sim.scan(particles)
 
         # 3. Convert scans to pixels
         scans_px = np.round(scans / (self.resolution * self.lidar_scale_to_map_scale)).astype(int)
+        scans_px[scans_px > 200] = 200
+        scans_px[scans_px < 0] = 0
 
         # 4. Get P(obs | particle x_k) using precomputed table
         probabilities = np.zeros(len(particles))

@@ -65,7 +65,9 @@ class ParticleFilter(Node):
 
         self.odom_pub = self.create_publisher(Odometry, "/pf/pose/odom", 1)
 
-        self.pose_pub = self.create_publisher(PoseArray, "pose", 1)
+        self.pose_pub = self.create_publisher(PoseArray, "/pose_debug", 1)
+        timer_period = 1/20
+        self.timer = self.create_timer(timer_period, self.publish_particles)
 
         # Initialize the models
         self.motion_model = MotionModel(self)
@@ -102,9 +104,10 @@ class ParticleFilter(Node):
     def laser_callback(self, msg):
         observation = msg.ranges
         probabilities = self.sensor_model.evaluate(self.particles, observation)
+        probabilities /= np.sum(probabilities)
         # resample particles
         indicies = np.random.choice(len(self.particles), size=len(self.particles), p=probabilities)
-        self.particles = [self.particles[i] for i in indicies]
+        self.particles = np.array([self.particles[i] for i in indicies])
         self.publish_average_pose()
 
 
@@ -119,6 +122,7 @@ class ParticleFilter(Node):
             omega = (twist.linear.z + prev_twist.linear.z) / 2
 
             dt = (msg.header.stamp.sec - self.previous_pose.header.stamp.sec) + (msg.header.stamp.nanosec - self.previous_pose.header.stamp.nanosec) * 1e-9
+            print("dt", dt)
 
             dx = vx * dt
             dy = vy * dt
@@ -127,6 +131,7 @@ class ParticleFilter(Node):
             odom_data = [dx, dy, dTheta]
 
             self.particles = self.motion_model.evaluate(self.particles, odom_data)
+            self.previous_pose = msg
         else:
             self.previous_pose = msg
         
@@ -196,7 +201,7 @@ class ParticleFilter(Node):
     def get_avg_pose(self, particles): #Mode clustering
         dbscan = DBSCAN(eps=1, min_samples=10)
         particles = np.array(particles)
-        #print(particles)
+        #print(particles[:5])
         clusters = dbscan.fit_predict(particles[:, :2])  # Only x and y coordinates are considered for clustering
 
         # Finding the cluster with the highest number of particles
@@ -213,7 +218,7 @@ class ParticleFilter(Node):
 
     def publish_particles(self):
         msg = PoseArray()
-        msg.header.frame_id = 'base_link'
+        msg.header.frame_id = 'map'
         msg.header.stamp = self.get_clock().now().to_msg()
 
         poses = []
