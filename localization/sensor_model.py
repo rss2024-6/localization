@@ -6,7 +6,8 @@ from scan_simulator_2d import PyScanSimulator2D
 from tf_transformations import euler_from_quaternion
 
 from nav_msgs.msg import OccupancyGrid
-
+import matplotlib.pyplot as plt
+from mpl_toolkits.mplot3d import Axes3D
 import sys
 
 np.set_printoptions(threshold=sys.maxsize)
@@ -14,7 +15,8 @@ np.set_printoptions(threshold=sys.maxsize)
 
 class SensorModel:
 
-    def __init__(self, node):
+    def __init__(self): #, node
+
         node.declare_parameter('map_topic', "default")
         node.declare_parameter('num_beams_per_particle', "default")
         node.declare_parameter('scan_theta_discretization', "default")
@@ -29,13 +31,15 @@ class SensorModel:
         self.lidar_scale_to_map_scale = node.get_parameter(
             'lidar_scale_to_map_scale').get_parameter_value().double_value
 
+        self.resolution = 1.0
+        self.lidar_scale_to_map_scale = 1.0
         ####################################
         # Adjust these parameters
-        self.alpha_hit = 0
-        self.alpha_short = 0
-        self.alpha_max = 0
-        self.alpha_rand = 0
-        self.sigma_hit = 0
+        self.alpha_hit = 0.74
+        self.alpha_short = 0.07
+        self.alpha_max = 0.07
+        self.alpha_rand = 0.12
+        self.sigma_hit = 8.0
 
         # Your sensor table will be a `table_width` x `table_width` np array:
         self.table_width = 201
@@ -61,12 +65,35 @@ class SensorModel:
         # Subscribe to the map
         self.map = None
         self.map_set = False
+
         self.map_subscriber = node.create_subscription(
             OccupancyGrid,
             self.map_topic,
             self.map_callback,
             1)
 
+    def calc_score(self, z_k, d):
+        z_max = 200
+        n = 1
+        p_hit = 0
+        p_short = 0
+        p_max = 0
+        p_rand = 0
+        #epsilon = 0.1
+        if z_k >= 0 and z_k <= z_max:
+            p_hit = n*1/(np.sqrt(2*np.pi*self.sigma_hit**2))*np.exp(-(z_k-d)**2/(2*self.sigma_hit**2))
+
+        if z_k >= 0 and z_k <= d and d != 0:
+            p_short = 2/d*(1-z_k/d)
+
+        if z_k == z_max:
+            p_max = 1
+
+        if z_k >= 0 and z_k <= z_max:
+            p_rand = 1/z_max
+
+        return (p_hit, p_short, p_max, p_rand)
+    
     def precompute_sensor_model(self):
         """
         Generate and store a table which represents the sensor model.
@@ -87,7 +114,50 @@ class SensorModel:
             No return type. Directly modify `self.sensor_model_table`.
         """
 
-        raise NotImplementedError
+        phits = np.zeros(self.sensor_model_table.shape)
+        extra = np.zeros(self.sensor_model_table.shape)
+
+        for zk in range(self.table_width):
+            for d in range(self.table_width):
+                p_hit, p_short, p_max, p_rand = self.calc_score(zk, d)
+                phits[zk][d] = p_hit
+                extra[zk][d] = self.alpha_short*p_short + self.alpha_max*p_max + self.alpha_rand*p_rand
+
+        # Normalize p_hit
+        nfac = np.sum(phits, axis = 0).reshape(phits.shape[1], 1)
+        print(nfac.shape)
+
+        phits /= nfac
+        
+        self.sensor_model_table = self.alpha_hit*phits + extra
+        self.sensor_model_table /= np.sum(self.sensor_model_table, axis = 0)
+
+        A = self.sensor_model_table
+        x = np.arange(A.shape[1])
+        y = np.arange(A.shape[0])
+        X, Y = np.meshgrid(x, y)
+
+        # Create a 3D plot
+        fig = plt.figure()
+        ax = fig.add_subplot(111, projection='3d')
+
+        # Plot the 3D surface
+        surf = ax.plot_surface(X, Y, A, cmap='viridis')
+
+        # Add labels and title
+        ax.set_xlabel('True Distance')
+        ax.set_ylabel('Measured Distance')
+        ax.set_zlabel('Probability Score')
+        plt.title('Probability Manifold (3D Surface)')
+
+        ax.invert_xaxis()
+        ax.set_zlim(0, 0.12)
+
+        # Add colorbar
+        plt.colorbar(surf, label='Probability Score')
+
+        # Show the plot
+        plt.show()
 
     def evaluate(self, particles, observation):
         """
@@ -121,7 +191,27 @@ class SensorModel:
         # to perform ray tracing from all the particles.
         # This produces a matrix of size N x num_beams_per_particle 
 
+        # 0. Downsample LIDAR data for efficiency
+        inds = list(np.round(np.linspace(0, len(observation) - 1, self.num_beams_per_particle)))
+        obs_ds = observation[inds]
+
+        # 1. Convert LIDAR data to pixels (round to nearest integer)
+        obs_px = np.round(obs_ds / (self.resolution * self.lidar_scale_to_map_scale))
+
+        # 2. Get scans from particle POV
         scans = self.scan_sim.scan(particles)
+
+        # 3. Convert scans to pixels
+        scans_px = scans / (self.resolution * self.lidar_scale_to_map_scale)
+
+        # 4. Get P(obs | particle x_k) using precomputed table
+        probabilities = np.zeros(len(particles))
+
+        for i in range(len(particles)):
+            ds = scans_px[i]
+            probabilities[i] = np.prod(np.array([self.sensor_model_table[obs_px[k]][ds[k]] for k in range(self.num_beams_per_particle)]))
+        
+        return probabilities
 
         ####################################
 
@@ -155,3 +245,5 @@ class SensorModel:
         self.map_set = True
 
         print("Map initialized")
+
+# s = SensorModel()
