@@ -15,7 +15,7 @@ np.set_printoptions(threshold=sys.maxsize)
 
 class SensorModel:
 
-    def __init__(self): #, node
+    def __init__(self, node): #, node
 
         node.declare_parameter('map_topic', "default")
         node.declare_parameter('num_beams_per_particle', "default")
@@ -113,51 +113,20 @@ class SensorModel:
         returns:
             No return type. Directly modify `self.sensor_model_table`.
         """
-
-        phits = np.zeros(self.sensor_model_table.shape)
-        extra = np.zeros(self.sensor_model_table.shape)
-
+        all_probs = np.zeros((self.table_width, self.table_width, 4))
         for zk in range(self.table_width):
             for d in range(self.table_width):
-                p_hit, p_short, p_max, p_rand = self.calc_score(zk, d)
-                phits[zk][d] = p_hit
-                extra[zk][d] = self.alpha_short*p_short + self.alpha_max*p_max + self.alpha_rand*p_rand
+                all_probs[zk, d, :] = self.calc_score(zk, d)
 
-        # Normalize p_hit
-        nfac = np.sum(phits, axis = 0).reshape(phits.shape[1], 1)
-        print(nfac.shape)
-
-        phits /= nfac
+        hit_axis = 0
+        all_probs[:, :, 0] /= np.sum(all_probs[:, :, 0], axis=hit_axis, keepdims=True)
         
-        self.sensor_model_table = self.alpha_hit*phits + extra
-        self.sensor_model_table /= np.sum(self.sensor_model_table, axis = 0)
+        self.sensor_model_table = all_probs[:, :, 0]*self.alpha_hit + all_probs[:, :, 1]*self.alpha_short + all_probs[:, :, 2]*self.alpha_max + all_probs[:, :, 3]*self.alpha_rand
 
-        A = self.sensor_model_table
-        x = np.arange(A.shape[1])
-        y = np.arange(A.shape[0])
-        X, Y = np.meshgrid(x, y)
+        complete_axis = 0
+        self.sensor_model_table /= np.sum(self.sensor_model_table, axis=complete_axis, keepdims=True)
 
-        # Create a 3D plot
-        fig = plt.figure()
-        ax = fig.add_subplot(111, projection='3d')
 
-        # Plot the 3D surface
-        surf = ax.plot_surface(X, Y, A, cmap='viridis')
-
-        # Add labels and title
-        ax.set_xlabel('True Distance')
-        ax.set_ylabel('Measured Distance')
-        ax.set_zlabel('Probability Score')
-        plt.title('Probability Manifold (3D Surface)')
-
-        ax.invert_xaxis()
-        ax.set_zlim(0, 0.12)
-
-        # Add colorbar
-        plt.colorbar(surf, label='Probability Score')
-
-        # Show the plot
-        plt.show()
 
     def evaluate(self, particles, observation):
         """
