@@ -196,7 +196,7 @@ class ParticleFilter(Node):
     def get_avg_pose(self, particles): #Mode clustering
         dbscan = DBSCAN(eps=1, min_samples=10)
         particles = np.array(particles)
-        print(particles)
+        #print(particles)
         clusters = dbscan.fit_predict(particles[:, :2])  # Only x and y coordinates are considered for clustering
 
         # Finding the cluster with the highest number of particles
