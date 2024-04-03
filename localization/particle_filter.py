@@ -4,6 +4,8 @@ from localization.motion_model import MotionModel
 from nav_msgs.msg import Odometry
 from geometry_msgs.msg import PoseWithCovarianceStamped
 
+import numpy as np
+
 from rclpy.node import Node
 import rclpy
 
@@ -74,6 +76,39 @@ class ParticleFilter(Node):
         #
         # Publish a transformation frame between the map
         # and the particle_filter_frame.
+
+        self.particles_len = 500
+        self.particles = np.empty(particles_len, 3) # TODO initialize particles array properly
+        self.initial_pose = PoseWithCovarianceStamped()
+
+    # sets the initial pose from rviz
+    def pose_callback(self, msg):
+        self.initial_pose = msg
+
+        # intitialize particles
+        point = msg.pose.position
+        x = point.x
+        y = point.y
+        # TODO: initialize particles around this point
+
+    def laser_callback(self, msg):
+        observation = msg.ranges
+        probabilities = self.sensor_model.evaluate(self.particles, observation)
+        # resample particles
+        self.particles = np.random.choice(self.particles, weights=probabilities, k=self.particles_len)
+
+        average_pose()
+
+    def odom_callback(self, msg):
+        twist = msg.twist.twist 
+        self.particles = self.motion_model.evaluate(self.particles, twist)
+
+        average_pose()
+
+    # find averge pose based on the particles
+    def average_pose(self):
+        pass
+
 
 
 def main(args=None):
