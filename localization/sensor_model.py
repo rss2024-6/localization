@@ -16,7 +16,8 @@ np.set_printoptions(threshold=sys.maxsize)
 class SensorModel:
 
     def __init__(self, node): #, node
-
+        
+        self.node = node
         node.declare_parameter('map_topic', "default")
         node.declare_parameter('num_beams_per_particle', "default")
         node.declare_parameter('scan_theta_discretization', "default")
@@ -161,17 +162,17 @@ class SensorModel:
         # This produces a matrix of size N x num_beams_per_particle 
 
         # 0. Downsample LIDAR data for efficiency
-        inds = list(np.round(np.linspace(0, len(observation) - 1, self.num_beams_per_particle)))
+        inds = list(np.round(np.linspace(0, len(observation) - 1, self.num_beams_per_particle, endpoint=True)).astype(int))
         obs_ds = observation[inds]
 
         # 1. Convert LIDAR data to pixels (round to nearest integer)
-        obs_px = np.round(obs_ds / (self.resolution * self.lidar_scale_to_map_scale))
+        obs_px = np.round(obs_ds / (self.resolution * self.lidar_scale_to_map_scale)).astype(int)
 
         # 2. Get scans from particle POV
         scans = self.scan_sim.scan(particles)
 
         # 3. Convert scans to pixels
-        scans_px = scans / (self.resolution * self.lidar_scale_to_map_scale)
+        scans_px = np.round(scans / (self.resolution * self.lidar_scale_to_map_scale)).astype(int)
 
         # 4. Get P(obs | particle x_k) using precomputed table
         probabilities = np.zeros(len(particles))
@@ -214,5 +215,3 @@ class SensorModel:
         self.map_set = True
 
         print("Map initialized")
-
-# s = SensorModel()
