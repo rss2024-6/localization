@@ -126,11 +126,7 @@ class ParticleFilter(Node):
         
         self.publish_average_pose()
 
-    def circular_mean(self, hours):
-        # Convert hours to radians
-        # What is the 15?! (24*15=360)
-        radians = [math.radians(hour * 15) for hour in hours]
-
+    def circular_mean(self, radians):
         # Calculate the sum of sin and cos values
         sin_sum = sum([math.sin(rad) for rad in radians])
         cos_sum = sum([math.cos(rad) for rad in radians])
@@ -138,10 +134,7 @@ class ParticleFilter(Node):
         # Calculate the circular mean using arctan2
         mean_rad = math.atan2(sin_sum, cos_sum)
 
-        # Convert the mean back to hours
-        mean_hour = (math.degrees(mean_rad) / 15) % 24
-
-        return mean_hour
+        return mean_rad
     
     # find averge pose based on the particles
     def publish_average_pose(self):
@@ -155,7 +148,8 @@ class ParticleFilter(Node):
         avg_pose = self.get_avg_pose(self.particles)
         avg_x = avg_pose[0]
         avg_y = avg_pose[1]
-        avg_theta = avg_pose[2]
+        # avg_theta = avg_pose[2]
+        avg_theta = self.circular_mean([p[2] for p in self.particles])
 
         odom = Odometry()
         odom.header.stamp = self.get_clock().now().to_msg()
@@ -205,7 +199,7 @@ class ParticleFilter(Node):
 
         # Calculating the average pose (x, y, and circular mean for theta) of the largest cluster
         average_pose = np.mean(largest_cluster_particles[:, :2], axis=0)  # Mean x and y
-        average_theta = self.circular_mean(largest_cluster_particles[:, 2])
+        average_theta = np.arctan2(np.sin(largest_cluster_particles[:, 2]).mean(), np.cos(largest_cluster_particles[:, 2]).mean())
 
         return average_pose[0], average_pose[1], average_theta
 
