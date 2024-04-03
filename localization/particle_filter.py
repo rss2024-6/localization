@@ -2,7 +2,8 @@ from localization.sensor_model import SensorModel
 from localization.motion_model import MotionModel
 
 from nav_msgs.msg import Odometry
-from geometry_msgs.msg import PoseWithCovarianceStamped, Quaternion, TransformStamped
+from sensor_msgs.msg import LaserScan
+from geometry_msgs.msg import PoseWithCovarianceStamped, Quaternion, TransformStamped, PoseArray, Pose
 from tf_transformations import euler_from_quaternion, quaternion_from_euler
 import tf2_ros
 from sklearn.cluster import DBSCAN
@@ -64,6 +65,8 @@ class ParticleFilter(Node):
 
         self.odom_pub = self.create_publisher(Odometry, "/pf/pose/odom", 1)
 
+        self.pose_pub = self.create_publisher(PoseArray, "pose", 1)
+
         # Initialize the models
         self.motion_model = MotionModel(self)
         self.sensor_model = SensorModel(self)
@@ -81,7 +84,7 @@ class ParticleFilter(Node):
         # and the particle_filter_frame.
 
         self.particles_len = 500
-        self.particles = np.empty(self.particles_len, 3) # TODO initialize particles array properly
+        self.particles = np.zeros((self.particles_len, 3)) # TODO initialize particles array properly
         self.initial_pose = PoseWithCovarianceStamped()
         self.previous_pose = None
         self.tf_broadcaster = tf2_ros.TransformBroadcaster(self)
@@ -89,10 +92,12 @@ class ParticleFilter(Node):
     # sets the initial pose from rviz
     def pose_callback(self, msg):
         self.initial_pose = msg
+        #self.previous_pose = msg
         quaternion = self.initial_pose.pose.pose.orientation
         theta = euler_from_quaternion([quaternion.x, quaternion.y, quaternion.z, quaternion.w])[2]
         self.particles = np.random.normal([msg.pose.pose.position.x, msg.pose.pose.position.y, theta], 0.1, (self.particles_len, 3))
 
+        self.get_logger().info("Pose set")
 
     def laser_callback(self, msg):
         observation = msg.ranges
@@ -105,9 +110,10 @@ class ParticleFilter(Node):
 
     def odom_callback(self, msg):
         twist = msg.twist.twist 
-        prev_twist = self.previous_pose.twist.twist
 
         if self.previous_pose is not None:
+            prev_twist = self.previous_pose.twist.twist
+
             vx = (twist.linear.x + prev_twist.linear.x) / 2
             vy = (twist.linear.y + prev_twist.linear.y) / 2
             omega = (twist.linear.z + prev_twist.linear.z) / 2
@@ -189,6 +195,8 @@ class ParticleFilter(Node):
     
     def get_avg_pose(self, particles): #Mode clustering
         dbscan = DBSCAN(eps=1, min_samples=10)
+        particles = np.array(particles)
+        print(particles)
         clusters = dbscan.fit_predict(particles[:, :2])  # Only x and y coordinates are considered for clustering
 
         # Finding the cluster with the highest number of particles
@@ -203,7 +211,34 @@ class ParticleFilter(Node):
 
         return average_pose[0], average_pose[1], average_theta
 
+    def publish_particles(self):
+        msg = PoseArray()
+        msg.header.frame_id = 'base_link'
+        msg.header.stamp = self.get_clock().now().to_msg()
 
+        poses = []
+        for particle in self.particles:
+            pose = Pose()
+            pose.position.x = particle[0]
+            pose.position.y = particle[1]
+            q = quaternion_from_euler(0, 0, particle[2])
+            quaternion = Quaternion()
+            quaternion.x = q[0]
+            quaternion.y = q[1]
+            quaternion.z = q[2]
+            quaternion.w = q[3]
+
+            pose.orientation = quaternion
+
+            poses.append(pose)
+
+        msg.poses = poses
+        self.pose_pub.publish(msg)
+
+
+
+
+        
         
 
 
