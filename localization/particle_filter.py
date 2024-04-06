@@ -8,6 +8,9 @@ from tf_transformations import euler_from_quaternion, quaternion_from_euler
 import tf2_ros
 from sklearn.cluster import DBSCAN
 
+from visualization_msgs.msg import Marker
+from geometry_msgs.msg import Point
+
 import numpy as np
 
 from rclpy.node import Node
@@ -67,6 +70,10 @@ class ParticleFilter(Node):
 
         self.pose_pub = self.create_publisher(PoseArray, "/pose_debug", 1)
         timer_period = 1/20
+        self.timer = self.create_timer(timer_period, self.publish_average_pose_arrow)
+
+        self.pose_pub_points = self.create_publisher(Marker, "/pose_debug_points", 1)
+        timer_period = 1/20
         self.timer = self.create_timer(timer_period, self.publish_particles_points)
 
         # Initialize the models
@@ -91,12 +98,14 @@ class ParticleFilter(Node):
         self.previous_pose = None
         self.tf_broadcaster = tf2_ros.TransformBroadcaster(self)
 
+        self.avg_pose = (0.,0.,0.)
+
     # sets the initial pose from rviz
     def pose_callback(self, msg):
         self.initial_pose = msg
         #self.previous_pose = msg
         quaternion = self.initial_pose.pose.pose.orientation
-        self.get_logger().info(str(quaternion))
+        #self.get_logger().info(str(quaternion))
         theta = euler_from_quaternion([quaternion.x, quaternion.y, quaternion.z, quaternion.w])[2]
         self.particles = np.random.normal([msg.pose.pose.position.x, msg.pose.pose.position.y, theta], 0.1, (self.particles_len, 3))
 
@@ -242,6 +251,30 @@ class ParticleFilter(Node):
         msg.poses = poses
         self.pose_pub.publish(msg)
 
+    def publish_average_pose_arrow(self):
+        msg = PoseArray()
+        msg.header.frame_id = 'map'
+        msg.header.stamp = self.get_clock().now().to_msg()
+
+        poses = []
+
+        particle = self.avg_pose
+        pose = Pose()
+        pose.position.x = particle[0]
+        pose.position.y = particle[1]
+        q = quaternion_from_euler(0, 0, particle[2])
+        quaternion = Quaternion()
+        quaternion.x = q[0]
+        quaternion.y = q[1]
+        quaternion.z = q[2]
+        quaternion.w = q[3]
+        pose.orientation = quaternion
+
+        poses.append(pose)
+
+        msg.poses = poses
+        self.pose_pub.publish(msg)
+
     def publish_snail_trail(self):
         """
         publishes line showing trail the robot has taken
@@ -252,12 +285,32 @@ class ParticleFilter(Node):
         """
         publishes a point for each
         """
+        # Example list of x, y coordinates
+        #points = [(1.0, 2.0), (3.0, 4.0), (5.0, 6.0)]
+        points = self.particles[:, :2]
 
+        # Create Marker message
+        marker_msg = Marker()
+        marker_msg.header.frame_id = 'map'  # Set the frame ID
+        marker_msg.header.stamp = self.get_clock().now().to_msg()
+        marker_msg.type = Marker.POINTS
+        marker_msg.action = Marker.ADD
+        marker_msg.scale.x = 0.1  # Set the scale of the points
+        marker_msg.scale.y = 0.1
+        marker_msg.scale.z = 0.1
+        marker_msg.color.a = 1.0  # Set the alpha value (transparency)
+        marker_msg.color.r = 1.0  # Set the color to red
 
+        # Populate the points
+        for point in points:
+            p = Point()
+            p.x = point[0]
+            p.y = point[1]
+            p.z = 0.0  # Assuming z-coordinate is 0
+            marker_msg.points.append(p)
 
+        self.pose_pub_points.publish(marker_msg)
 
-        
-        
 
 
 
