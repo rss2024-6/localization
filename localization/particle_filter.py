@@ -96,10 +96,11 @@ class ParticleFilter(Node):
         self.initial_pose = msg
         #self.previous_pose = msg
         quaternion = self.initial_pose.pose.pose.orientation
+        self.get_logger().info(str(quaternion))
         theta = euler_from_quaternion([quaternion.x, quaternion.y, quaternion.z, quaternion.w])[2]
         self.particles = np.random.normal([msg.pose.pose.position.x, msg.pose.pose.position.y, theta], 0.1, (self.particles_len, 3))
 
-        self.get_logger().info("Pose set")
+        #self.get_logger().info("Pose set")
 
     def laser_callback(self, msg):
         observation = msg.ranges
@@ -119,7 +120,7 @@ class ParticleFilter(Node):
 
             vx = (twist.linear.x + prev_twist.linear.x) / 2
             vy = (twist.linear.y + prev_twist.linear.y) / 2
-            omega = (twist.linear.z + prev_twist.linear.z) / 2
+            omega = (twist.angular.z + prev_twist.angular.z) / 2
 
             dt = (msg.header.stamp.sec - self.previous_pose.header.stamp.sec) + (msg.header.stamp.nanosec - self.previous_pose.header.stamp.nanosec) * 1e-9
             print("dt", dt)
