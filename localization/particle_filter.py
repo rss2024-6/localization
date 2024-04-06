@@ -67,7 +67,7 @@ class ParticleFilter(Node):
 
         self.pose_pub = self.create_publisher(PoseArray, "/pose_debug", 1)
         timer_period = 1/20
-        self.timer = self.create_timer(timer_period, self.publish_particles)
+        self.timer = self.create_timer(timer_period, self.publish_particles_points)
 
         # Initialize the models
         self.motion_model = MotionModel(self)
@@ -158,6 +158,7 @@ class ParticleFilter(Node):
         # avg_theta = self.circular_mean([p[2] for p in self.particles])
 
         avg_pose = self.get_avg_pose(self.particles)
+        self.avg_pose = avg_pose
         avg_x = avg_pose[0]
         avg_y = avg_pose[1]
         avg_theta = avg_pose[2]
@@ -217,7 +218,7 @@ class ParticleFilter(Node):
 
         return average_pose[0], average_pose[1], average_theta
 
-    def publish_particles(self):
+    def publish_particles_arrows(self):
         msg = PoseArray()
         msg.header.frame_id = 'map'
         msg.header.stamp = self.get_clock().now().to_msg()
@@ -240,6 +241,17 @@ class ParticleFilter(Node):
 
         msg.poses = poses
         self.pose_pub.publish(msg)
+
+    def publish_snail_trail(self):
+        """
+        publishes line showing trail the robot has taken
+        """
+        current_pos = self.avg_pose
+
+    def publish_particles_points(self):
+        """
+        publishes a point for each
+        """
 
 
 
