@@ -4,6 +4,7 @@ from localization.motion_model import MotionModel
 from nav_msgs.msg import Odometry
 from sensor_msgs.msg import LaserScan
 from geometry_msgs.msg import PoseWithCovarianceStamped, Quaternion, TransformStamped, PoseArray, Pose
+from visualization_msgs.msg import Marker
 from tf_transformations import euler_from_quaternion, quaternion_from_euler
 import tf2_ros
 from sklearn.cluster import DBSCAN
@@ -76,6 +77,10 @@ class ParticleFilter(Node):
         timer_period = 1/20
         self.timer = self.create_timer(timer_period, self.publish_particles_points)
 
+        self.snail_trail_pub = self.create_publisher(Marker, "/snail_trail", 1)
+        timer_period = 1/20
+        self.timer = self.create_timer(timer_period, self.publish_snail_trail)
+
         # Initialize the models
         self.motion_model = MotionModel(self)
         self.sensor_model = SensorModel(self)
@@ -99,6 +104,8 @@ class ParticleFilter(Node):
         self.tf_broadcaster = tf2_ros.TransformBroadcaster(self)
 
         self.avg_pose = (0.,0.,0.)
+
+        self.snail_trail = []
 
     # sets the initial pose from rviz
     def pose_callback(self, msg):
@@ -279,7 +286,22 @@ class ParticleFilter(Node):
         """
         publishes line showing trail the robot has taken
         """
-        current_pos = self.avg_pose
+        snail_trail_marker = Marker()
+        snail_trail_marker.header.frame_id = 'map'
+        snail_trail_marker.type = marker.LINE_STRIP
+        snail_trail_marker.color.a = 1.0
+        snail_trail_marker.color.g = 1.0
+
+        current_position = self.avg_pose
+        current_point = Point()
+        current_point.x = current_position[0]
+        current_point.y = current_position[1]
+        current_point.z = 0
+        self.snail_trail.append(current_point)
+
+        snail_trail_marker.points = self.snail_trail
+
+        self.snail_trail_pub.publish(snail_trail_marker)
 
     def publish_particles_points(self):
         """
