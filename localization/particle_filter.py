@@ -76,6 +76,11 @@ class ParticleFilter(Node):
         timer_period = 1/20
         self.timer = self.create_timer(timer_period, self.publish_particles_points)
 
+        self.snail_trail_pub = self.create_publisher(Marker, "/snail_trail", 1)
+        timer_period = 1/2
+        self.timer = self.create_timer(timer_period, self.publish_snail_trail)
+
+
         # Initialize the models
         self.motion_model = MotionModel(self)
         self.sensor_model = SensorModel(self)
@@ -99,6 +104,7 @@ class ParticleFilter(Node):
         self.tf_broadcaster = tf2_ros.TransformBroadcaster(self)
 
         self.avg_pose = (0.,0.,0.)
+        self.snail_trail = []
 
     # sets the initial pose from rviz
     def pose_callback(self, msg):
@@ -132,7 +138,7 @@ class ParticleFilter(Node):
             omega = (twist.angular.z + prev_twist.angular.z) / 2
 
             dt = (msg.header.stamp.sec - self.previous_pose.header.stamp.sec) + (msg.header.stamp.nanosec - self.previous_pose.header.stamp.nanosec) * 1e-9
-            print("dt", dt)
+            #print("dt", dt)
 
             dx = vx * dt
             dy = vy * dt
@@ -167,6 +173,7 @@ class ParticleFilter(Node):
         # avg_theta = self.circular_mean([p[2] for p in self.particles])
 
         avg_pose = self.get_avg_pose(self.particles)
+
         self.avg_pose = avg_pose
         avg_x = avg_pose[0]
         avg_y = avg_pose[1]
@@ -224,6 +231,7 @@ class ParticleFilter(Node):
         # Calculating the average pose (x, y, and circular mean for theta) of the largest cluster
         average_pose = np.mean(largest_cluster_particles[:, :2], axis=0)  # Mean x and y
         average_theta = self.circular_mean(largest_cluster_particles[:, 2])
+        
 
         return average_pose[0], average_pose[1], average_theta
 
@@ -279,7 +287,29 @@ class ParticleFilter(Node):
         """
         publishes line showing trail the robot has taken
         """
-        current_pos = self.avg_pose
+        # Create Marker message
+        marker_msg = Marker()
+        marker_msg.header.frame_id = 'map'  # Set the frame ID
+        marker_msg.header.stamp = self.get_clock().now().to_msg()
+        marker_msg.type = Marker.POINTS
+        marker_msg.action = Marker.ADD
+        marker_msg.scale.x = 0.05  # Set the scale of the points
+        marker_msg.scale.y = 0.05
+        marker_msg.scale.z = 0.05
+        marker_msg.color.a = 1.0  # Set the alpha value (transparency)
+        marker_msg.color.b = 1.0  # Set the color to red
+
+        self.snail_trail.append((self.avg_pose[0], self.avg_pose[1]))
+
+        # Populate the points
+        for point in self.snail_trail:
+            p = Point()
+            p.x = point[0]
+            p.y = point[1]
+            p.z = 0.0  # Assuming z-coordinate is 0
+            marker_msg.points.append(p)
+
+        self.snail_trail_pub.publish(marker_msg)
 
     def publish_particles_points(self):
         """
@@ -295,9 +325,9 @@ class ParticleFilter(Node):
         marker_msg.header.stamp = self.get_clock().now().to_msg()
         marker_msg.type = Marker.POINTS
         marker_msg.action = Marker.ADD
-        marker_msg.scale.x = 0.1  # Set the scale of the points
-        marker_msg.scale.y = 0.1
-        marker_msg.scale.z = 0.1
+        marker_msg.scale.x = 0.05  # Set the scale of the points
+        marker_msg.scale.y = 0.05
+        marker_msg.scale.z = 0.05
         marker_msg.color.a = 1.0  # Set the alpha value (transparency)
         marker_msg.color.r = 1.0  # Set the color to red
 
