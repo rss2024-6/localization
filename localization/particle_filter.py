@@ -5,6 +5,7 @@ from nav_msgs.msg import Odometry
 from sensor_msgs.msg import LaserScan
 from geometry_msgs.msg import PoseWithCovarianceStamped, Quaternion, TransformStamped, PoseArray, Pose
 from tf_transformations import euler_from_quaternion, quaternion_from_euler
+from std_msgs.msg import Float32
 import tf2_ros
 from sklearn.cluster import DBSCAN
 
@@ -80,6 +81,10 @@ class ParticleFilter(Node):
         self.snail_trail_pub = self.create_publisher(Marker, "/snail_trail", 1)
         timer_period = 1/2
         self.timer = self.create_timer(timer_period, self.publish_snail_trail)
+
+        self.variance_pub = self.create_publisher(Float32, "/variance", 1)
+        timer_period = 1/2
+        self.timer = self.create_timer(timer_period, self.publish_variance)
 
 
         # Initialize the models
@@ -346,6 +351,20 @@ class ParticleFilter(Node):
             marker_msg.points.append(p)
 
         self.pose_pub_points.publish(marker_msg)
+    
+    def publish_variance(self):
+        msg = Float32()
+        columns = [self.particles[:, i] for i in range(self.particles.shape[1])]
+        variance_sum = 0
+        for i, column in enumerate(columns, start=1):
+            variance_sum += np.var(self.part)
+        
+        variance = variance_sum/3
+        msg.data = variance
+        self.variance_pub.publish(msg)
+
+
+
 
 
 
