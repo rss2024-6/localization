@@ -163,7 +163,7 @@ class SensorModel:
 
         # 0. Downsample LIDAR data for efficiency
         inds = list(np.round(np.linspace(0, len(observation) - 1, self.num_beams_per_particle, endpoint=True)).astype(int))
-        print(inds)
+        # print(inds)
         obs_ds = np.array(observation)[inds]
 
         # 1. Convert LIDAR data to pixels (round to nearest integer)

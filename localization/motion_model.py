@@ -34,9 +34,15 @@ class MotionModel:
         ####################################
         # TODO
         N = len(particles)
-        e_x  = 0.015          ## last best: 0.02, 0.01, 0.001
-        e_y  = 0.01
-        e_th = 0.001
+        # e_x  = 0.015          ## last best: 0.02, 0.01, 0.001
+        # e_y  = 0.01
+        # e_th = 0.001
+        # e_x  = 0.05        
+        # e_y  = 0.04
+        # e_th = 0.001
+        e_x  = 0.3         ## last best: 0.02, 0.01, 0.001
+        e_y  = 0.3
+        e_th = 0.005
 
         noise = np.array([np.random.normal(odometry[0], e_x,  len(particles)),
                           np.random.normal(odometry[1], e_y,  len(particles)),

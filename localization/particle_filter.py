@@ -26,6 +26,7 @@ class ParticleFilter(Node):
         self.declare_parameter('particle_filter_frame', "default")
         self.particle_filter_frame = self.get_parameter('particle_filter_frame').get_parameter_value().string_value
         self.simulation = True
+        self.odom_noise = True
 
         #  *Important Note #1:* It is critical for your particle
         #     filter to obtain the following topic names from the
@@ -132,10 +133,16 @@ class ParticleFilter(Node):
 
         if self.previous_pose is not None:
             prev_twist = self.previous_pose.twist.twist
-
-            vx = (twist.linear.x + prev_twist.linear.x) / 2
+                
+            vx = (twist.linear.x + prev_twist.linear.x) / 2 
             vy = (twist.linear.y + prev_twist.linear.y) / 2
             omega = (twist.angular.z + prev_twist.angular.z) / 2
+
+            if self.odom_noise:
+                vx = np.random.normal(vx, .1, 1)[0]
+                vy = np.random.normal(vy, .1, 1)[0]
+                omega = np.random.normal(omega, .1, 1)[0]
+
 
             dt = (msg.header.stamp.sec - self.previous_pose.header.stamp.sec) + (msg.header.stamp.nanosec - self.previous_pose.header.stamp.nanosec) * 1e-9
             #print("dt", dt)
@@ -173,12 +180,11 @@ class ParticleFilter(Node):
         # avg_theta = self.circular_mean([p[2] for p in self.particles])
 
         avg_pose = self.get_avg_pose(self.particles)
-
         self.avg_pose = avg_pose
         avg_x = avg_pose[0]
         avg_y = avg_pose[1]
-        avg_theta = avg_pose[2]
-        # avg_theta = self.circular_mean([p[2] for p in self.particles])
+        # avg_theta = avg_pose[2]
+        avg_theta = self.circular_mean([p[2] for p in self.particles])
 
         odom = Odometry()
         odom.header.stamp = self.get_clock().now().to_msg()
