@@ -27,8 +27,8 @@ class ParticleFilter(Node):
         self.declare_parameter('particle_filter_frame', "default")
         self.particle_filter_frame = self.get_parameter('particle_filter_frame').get_parameter_value().string_value
         # Params
-        self.simulation = True
-        self.odom_noise = True
+        self.simulation = False
+        self.odom_noise = False
         # Optimizations
 
         #  *Important Note #1:* It is critical for your particle
@@ -125,7 +125,7 @@ class ParticleFilter(Node):
         #self.previous_pose = msg
         quaternion = self.initial_pose.pose.pose.orientation
         #self.get_logger().info(str(quaternion))
-        theta = euler_from_quaternion([quaternion.x, quaternion.y, quaternion.z, quaternion.w])[2]
+        theta = 1 if self.simulation else -1 * euler_from_quaternion([quaternion.x, quaternion.y, quaternion.z, quaternion.w])[2]
         self.particles = np.random.normal([msg.pose.pose.position.x, msg.pose.pose.position.y, theta], 0.1, (self.particles_len, 3))
 
         #self.get_logger().info("Pose set")
@@ -153,7 +153,7 @@ class ParticleFilter(Node):
                 
             vx = (twist.linear.x + prev_twist.linear.x) / 2 
             vy = (twist.linear.y + prev_twist.linear.y) / 2
-            omega = (twist.angular.z + prev_twist.angular.z) / 2
+            omega = 1 if self.simulation else -1 * (twist.angular.z + prev_twist.angular.z) / 2
 
             if self.odom_noise:
                 vx = np.random.normal(vx, .1, 1)[0]
@@ -246,6 +246,8 @@ class ParticleFilter(Node):
         clusters = dbscan.fit_predict(particles[:, :2])  # Only x and y coordinates are considered for clustering
 
         # Finding the cluster with the highest number of particles
+        if len(clusters) == 0:
+            return np.median([p[0] for p in self.particles]), np.median([p[1] for p in self.particles]), self.circular_mean([p[2] for p in self.particles])
         largest_cluster_id = np.argmax(np.bincount(clusters[clusters >= 0]))
 
         # Filtering particles that belong to the largest cluster
