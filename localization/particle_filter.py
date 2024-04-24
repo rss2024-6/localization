@@ -136,13 +136,12 @@ class ParticleFilter(Node):
     def resample_particles(self):
         if self.observation is not None:
             probabilities = self.sensor_model.evaluate(self.particles, self.observation)
-            probabilities /= np.sum(probabilities)
-            #"squash" sensor_model output (raise to the power of 1/3)
-
-            # resample particles
-            indicies = np.random.choice(len(self.particles), size=len(self.particles), p=probabilities)
-            self.particles = np.array([self.particles[i] for i in indicies])
-            self.publish_average_pose()
+            if probabilities is not None:
+                probabilities /= np.sum(probabilities)
+                # resample particles
+                indicies = np.random.choice(len(self.particles), size=len(self.particles), p=probabilities)
+                self.particles = np.array([self.particles[i] for i in indicies])
+                self.publish_average_pose()
 
 
 
